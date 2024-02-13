@@ -5,7 +5,6 @@ import "../interfaces/token/IERC20.sol";
 
 contract StakingRewards {
     
-    IERC20 public immutable stakingToken;
     IERC20 public immutable rewardsToken;
 
     address public owner;
@@ -41,7 +40,6 @@ contract StakingRewards {
 
     constructor(address _stakingToken, address _rewardToken) {
         owner = msg.sender;
-        stakingToken = IERC20(_stakingToken);
         rewardsToken = IERC20(_rewardToken);
     }
 
@@ -151,7 +149,7 @@ contract StakingRewards {
     ) external onlyOwner updateReward(0, address(0)) {
         Pool storage pool = pools[_poolId];
 
-        if (block.timestamp >= pool.finishAt) {
+        if (block.timestamp >= pool.finishAt) {   //     18218670             finishAt: 19218674
             pool.rewardRate = _amount / pool.duration;
         } else {
             uint remainingRewards = (pool.finishAt - block.timestamp) * pool.rewardRate;
@@ -172,4 +170,3 @@ contract StakingRewards {
         return x <= y ? x : y;
     }
 }
-
