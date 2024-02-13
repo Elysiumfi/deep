@@ -38,7 +38,7 @@ contract StakingRewards {
     event HarvestRewards(address indexed user, uint256 indexed poolId, uint256 amount);
     event PoolCreated(uint256 poolId);
 
-    constructor(address _stakingToken, address _rewardToken) {
+    constructor(address _rewardToken) {
         owner = msg.sender;
         rewardsToken = IERC20(_rewardToken);
     }
