@@ -1,172 +1,172 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "../interfaces/token/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "./TransferHelper.sol";
 
-contract StakingRewards {
+contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
     
-    IERC20 public immutable rewardsToken;
+    IERC721 public constant EXCHANGE_NFT = IERC721(0xCd76D0Cf64Bf4A58D898905C5adAD5e1E838E0d3);
 
-    address public owner;
+    uint256 private _nextTokenId;
+    bool public isSaleActive;
+    
+    uint public TOTAL_SUPPLY = 8888;
+    uint256 public currentTotalSupply;
 
-    Pool[] public pools; // Staking poolsx
+    MintingPhase public phase;
 
-    // Mapping poolId => staker address => PoolStaker
-    mapping(uint256 => mapping(address => PoolStaker)) public poolStakers;
+    mapping(address => bool) public whitelisted;
+    mapping(address => bool) public blacklisted; 
+    mapping(uint256 => bool) public usedNFTs;
 
-    // Staking user for a pool
-    struct PoolStaker {
-        uint256 amount; // The tokens quantity the user has staked.
-        uint256 rewards; // The reward tokens quantity the user can harvest
-        uint256 userRewardPerTokenPaid; 
+    uint256 public whitelistPrice;
+    uint256 public publicPrice;
+    
+    enum MintingPhase {
+        Exchange, 
+        Whitelist, 
+        Public
     }
 
-    // Staking pool
-    struct Pool {
-        IERC20 stakeToken; // Token to be staked
-        uint256 tokensStaked; // Total tokens staked
-        uint256 updatedAt; // Last block number the user had their rewards calculated
-        uint256 finishAt; // Timestamp of when the rewards finish
-        uint duration; // Duration of rewards to be paid out (in seconds)
-        uint256 rewardRate; // Reward to be paid out per second
-        uint256 rewardPerTokenStored; // Sum of (reward rate * dt * 1e18 / total supply)
-    }
-
-    // Events
-    event Deposit(address indexed user, uint256 indexed poolId, uint256 amount);
-    event Withdraw(address indexed user, uint256 indexed poolId, uint256 amount);
-    event HarvestRewards(address indexed user, uint256 indexed poolId, uint256 amount);
-    event PoolCreated(uint256 poolId);
-
-    constructor(address _rewardToken) {
-        owner = msg.sender;
-        rewardsToken = IERC20(_rewardToken);
-    }
-
-    modifier onlyOwner() {
-        require(msg.sender == owner, "not authorized");
-        _;
-    }
-
-    /**
-     * @dev Create a new staking pool
-     */
-    function createPool(IERC20 _stakeToken) external onlyOwner {
-        Pool memory pool;
-        pool.stakeToken =  _stakeToken;
-        pools.push(pool);
-        uint256 poolId = pools.length - 1;
-        emit PoolCreated(poolId);
-    }
-
-    modifier updateReward(uint256 _poolId, address _account) {
-        Pool storage pool = pools[_poolId];
-        PoolStaker storage staker = poolStakers[_poolId][_account];
-
-        pool.rewardPerTokenStored = rewardPerToken(_poolId);
-        pool.updatedAt = lastTimeRewardApplicable(_poolId);
-
-        if (_account != address(0)) {
-            staker.rewards = earned(_poolId, _account);
-            staker.userRewardPerTokenPaid = pool.rewardPerTokenStored;
-        }
+    modifier blacklist(address resipient) {
+        require(!blacklisted[resipient], "Recipient is blacklisted!");
 
         _;
     }
 
-    function lastTimeRewardApplicable(uint256 _poolId) public view returns (uint) {
-        Pool storage pool = pools[_poolId];
-        return _min(pool.finishAt, block.timestamp);
-    }
+    constructor(string memory name, string memory symbol)
+        ERC721(name, symbol)
+    {}
 
-    function rewardPerToken(uint256 _poolId) public view returns (uint) {
-        Pool storage pool = pools[_poolId];
+    function mint(uint256 tokenId, address to, string memory uri) external payable nonReentrant {
+        require(isSaleActive, "The sale is not active");
+        uint256 currTotalSupply = currentTotalSupply;
+        require(currTotalSupply + 1 <= TOTAL_SUPPLY, "total supply overflow");
 
-        if (pool.tokensStaked == 0) {
-            return pool.rewardPerTokenStored;
-        }
+        if(phase == MintingPhase.Exchange) {
+            require(msg.sender == EXCHANGE_NFT.ownerOf(tokenId), "You are not the owner of the NFT");
+            require(!usedNFTs[tokenId], "The NFT has already been used");
 
-        return
-            pool.rewardPerTokenStored +
-            (pool.rewardRate * (lastTimeRewardApplicable(_poolId) - pool.updatedAt) * 1e18) /
-            pool.tokensStaked;
-    }
+            usedNFTs[tokenId] = true;
+            _safeMintInternal(to, uri);
+        } else if(phase == MintingPhase.Whitelist) {
+            require(whitelisted[msg.sender], "The whitelist is missing");
+            require(msg.value >= whitelistPrice, "Insufficient funds");
 
-    function stake(uint256 _poolId, uint _amount) external updateReward(_poolId, msg.sender) {
-        require(_amount > 0, "amount = 0");
+            uint256 refundAmount = msg.value - whitelistPrice;
+            whitelisted[msg.sender] = false;
 
-        Pool storage pool = pools[_poolId];
-        PoolStaker storage staker = poolStakers[_poolId][msg.sender];
+            _safeMintInternal(to, uri);
+            _refundFunds(refundAmount);
 
-        pool.stakeToken.transferFrom(msg.sender, address(this), _amount);
-        staker.amount += _amount;
-        pool.tokensStaked += _amount;
-        emit Deposit(msg.sender, _poolId, _amount);
-    }
-
-    function withdraw(uint256 _poolId, uint _amount) external updateReward(_poolId, msg.sender) {
-        require(_amount > 0, "amount = 0");
-
-        Pool storage pool = pools[_poolId];
-        PoolStaker storage staker = poolStakers[_poolId][msg.sender];
-
-        staker.amount -= _amount;
-        pool.tokensStaked -= _amount;
-        pool.stakeToken.transfer(msg.sender, _amount);
-        emit Withdraw(msg.sender, _poolId, _amount);
-    }
-
-    function earned(uint256 _poolId, address _account) public view returns (uint) {
-        PoolStaker storage staker = poolStakers[_poolId][_account];
-
-        return
-            ((staker.amount *
-                (rewardPerToken(_poolId) - staker.userRewardPerTokenPaid)) / 1e18) +
-            staker.rewards;
-    }
-
-    function getReward(uint256 _poolId) external updateReward(_poolId, msg.sender) {
-        PoolStaker storage staker = poolStakers[_poolId][msg.sender];
-
-        uint reward = staker.rewards;
-        if (reward > 0) {
-            staker.rewards = 0;
-            rewardsToken.transfer(msg.sender, reward);
-        }
-        emit HarvestRewards(msg.sender, _poolId, reward);
-    }
-
-    function setRewardsDuration(uint256 _poolId, uint _duration) external onlyOwner {
-        Pool storage pool = pools[_poolId];
-        require(pool.finishAt < block.timestamp, "reward duration not finished");
-        
-        pool.duration = _duration;
-    }
-
-    function notifyRewardAmount(
-        uint256 _poolId,
-        uint256 _amount
-    ) external onlyOwner updateReward(0, address(0)) {
-        Pool storage pool = pools[_poolId];
-
-        if (block.timestamp >= pool.finishAt) {   //     18218670             finishAt: 19218674
-            pool.rewardRate = _amount / pool.duration;
         } else {
-            uint remainingRewards = (pool.finishAt - block.timestamp) * pool.rewardRate;
-            pool.rewardRate = (_amount + remainingRewards) / pool.duration;
+            require(msg.value >= publicPrice, "Insufficient funds");
+            uint256 refundAmount = msg.value - publicPrice;
+
+            _safeMintInternal(to, uri);
+            _refundFunds(refundAmount);
         }
-
-        require(pool.rewardRate > 0, "reward rate = 0");
-        require(
-            pool.rewardRate * pool.duration <= rewardsToken.balanceOf(address(this)),
-            "reward amount > balance"
-        );
-
-        pool.finishAt = block.timestamp + pool.duration;
-        pool.updatedAt = block.timestamp;
     }
 
-    function _min(uint x, uint y) private pure returns (uint) {
-        return x <= y ? x : y;
+    function _safeMintInternal(address to, string memory uri) internal {
+        uint256 _tokenId = _nextTokenId++;
+        _safeMint(to, _tokenId);
+        _setTokenURI(_tokenId, uri);
+
+        currentTotalSupply += 1;
+    }
+
+    function _refundFunds(uint256 refundAmount) internal {
+        if(refundAmount > 0) {
+            TransferHelper.safeTransferETH(msg.sender, refundAmount);
+        }
+    }
+
+    function transferFrom(address from, address to, uint256 tokenId) public override(ERC721, IERC721) blacklist(to) {
+        super.transferFrom(from, to, tokenId);
+    }
+
+    function safeTransferFrom(address from, address to, uint256 tokenId) public override(ERC721, IERC721) blacklist(to) {
+        super.safeTransferFrom(from, to, tokenId);
+    }
+
+    function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data) public override(ERC721, IERC721) blacklist(to) {
+        super.safeTransferFrom(from, to, tokenId, data);
+    }
+
+    // Owner-only functions
+    function setWhitelist(address[] calldata users, bool action) external onlyOwner {
+        uint256 usersLength = users.length;
+
+        for(uint256 i; i < usersLength; ) {
+            whitelisted[users[i]] = action;
+
+            unchecked {
+                ++i;
+            }
+        }
+    } 
+
+    // Owner-only functions
+    function setBlacklist(address[] calldata users, bool action) external onlyOwner {
+        uint256 usersLength = users.length;
+
+        for(uint256 i; i < usersLength; ) {
+            blacklisted[users[i]] = action;
+
+            unchecked {
+                ++i;
+            }
+        }
+    } 
+
+    // Owner-only functions
+    function flipSaleState() external onlyOwner {
+        isSaleActive = !isSaleActive;
+    }
+    
+    // Owner-only functions
+    function updateWhitelistPrice(uint256 price) external onlyOwner {
+        whitelistPrice = price;
+    }
+    
+    // Owner-only functions
+    function updatePublicPrice(uint256 price) external onlyOwner {
+        publicPrice = price;
+    } 
+
+    // Owner-only functions
+    function changeMintingPhase(MintingPhase _phase) external onlyOwner {
+        phase = _phase;
+    }
+    
+    // Owner-only functions
+    function slashingTotalSupply() external initializer onlyOwner {
+        TOTAL_SUPPLY = TOTAL_SUPPLY / 2; // TOTAL_SUPPLY =  4444
+    }
+
+    // The following functions are overrides required by Solidity.
+
+    function tokenURI(uint256 tokenId)
+        public
+        view
+        override(ERC721URIStorage)
+        returns (string memory)
+    {
+        return super.tokenURI(tokenId);
+    }
+
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        override(ERC721URIStorage)
+        returns (bool)
+    {
+        return super.supportsInterface(interfaceId);
     }
 }
