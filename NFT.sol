@@ -9,7 +9,7 @@ contract StakingRewards {
 
     address public owner;
 
-    Pool[] public pools; // Staking pools
+    Pool[] public pools; // Staking poolsx
 
     // Mapping poolId => staker address => PoolStaker
     mapping(uint256 => mapping(address => PoolStaker)) public poolStakers;
