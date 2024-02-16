@@ -33,8 +33,8 @@ contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
         Public
     }
 
-    modifier blacklist(address resipient) {
-        require(!blacklisted[resipient], "Recipient is blacklisted!");
+    modifier blacklist(address recipient) {
+        require(!blacklisted[recipient], "Recipient is blacklisted!");
 
         _;
     }
