@@ -46,7 +46,7 @@ contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
     function mint(uint256 tokenId, address to, string memory uri) external payable nonReentrant {
         require(isSaleActive, "The sale is not active");
         uint256 currTotalSupply = currentTotalSupply;
-        require(currTotalSupply + 1 <= TOTAL_SUPPLY, "total supply overflow");
+        require(currTotalSupply++ <= TOTAL_SUPPLY, "total supply overflow");
 
         if(phase == MintingPhase.Exchange) {
             require(msg.sender == EXCHANGE_NFT.ownerOf(tokenId), "You are not the owner of the NFT");
