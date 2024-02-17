@@ -13,8 +13,6 @@ contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
     using Strings for uint256;
     
     IERC721 public constant EXCHANGE_NFT = IERC721(0xCd76D0Cf64Bf4A58D898905C5adAD5e1E838E0d3);
-
-    uint256 private _nextTokenId;
     
     string public baseURI;
     string public baseExtension = ".json";
@@ -23,7 +21,7 @@ contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
     bool public revealed;
     
     uint public TOTAL_SUPPLY = 8888;
-    uint256 public currentTotalSupply;
+    uint256 public _totalSupply;
 
     MintingPhase public phase;
 
@@ -52,7 +50,7 @@ contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
 
     function mint(uint256 tokenId, address to, string memory uri) external payable nonReentrant {
         require(isSaleActive, "The sale is not active");
-        require(currentTotalSupply <= TOTAL_SUPPLY, "total supply overflow");
+        require(_totalSupply <= TOTAL_SUPPLY, "total supply overflow");
 
         if(phase == MintingPhase.Exchange) {
             require(msg.sender == EXCHANGE_NFT.ownerOf(tokenId), "You are not the owner of the NFT");
@@ -76,11 +74,11 @@ contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
     }
 
     function _safeMintInternal(address to, string memory uri) internal {
-        uint256 _tokenId = _nextTokenId++;
+        uint256 _tokenId = _totalSupply++;
         _safeMint(to, _tokenId);
         _setTokenURI(_tokenId, uri);
 
-        currentTotalSupply += 1;
+        _totalSupply++;
     }
 
     function transferFrom(address from, address to, uint256 tokenId) public override(ERC721, IERC721) blacklist(to) {
@@ -158,6 +156,10 @@ contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
     }
 
     // The following functions are overrides required by Solidity.
+
+    function totalSupply() external view returns(uint256) {
+        return _totalSupply;
+    }
 
     function tokenURI(uint256 tokenId)
         public
