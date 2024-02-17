@@ -6,14 +6,21 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 import "./TransferHelper.sol";
 
-contract nuarNFT is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
+contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
+    using Strings for uint256;
     
     IERC721 public constant EXCHANGE_NFT = IERC721(0xCd76D0Cf64Bf4A58D898905C5adAD5e1E838E0d3);
 
     uint256 private _nextTokenId;
+    
+    string public baseURI;
+    string public baseExtension = ".json";
+
     bool public isSaleActive;
+    bool public revealed;
     
     uint public TOTAL_SUPPLY = 8888;
     uint256 public currentTotalSupply;
@@ -39,14 +46,13 @@ contract nuarNFT is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
         _;
     }
 
-    constructor(string memory name, string memory symbol)
+    constructor(string memory name, string memory symbol, string memory _baseURI)
         ERC721(name, symbol)
     {}
 
     function mint(uint256 tokenId, address to, string memory uri) external payable nonReentrant {
         require(isSaleActive, "The sale is not active");
-        uint256 currTotalSupply = currentTotalSupply;
-        require(currTotalSupply++ <= TOTAL_SUPPLY, "total supply overflow");
+        require(currentTotalSupply <= TOTAL_SUPPLY, "total supply overflow");
 
         if(phase == MintingPhase.Exchange) {
             require(msg.sender == EXCHANGE_NFT.ownerOf(tokenId), "You are not the owner of the NFT");
@@ -56,20 +62,16 @@ contract nuarNFT is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
             _safeMintInternal(to, uri);
         } else if(phase == MintingPhase.Whitelist) {
             require(whitelisted[msg.sender], "The whitelist is missing");
-            require(msg.value >= whitelistPrice, "Insufficient funds");
+            require(msg.value == whitelistPrice, "Insufficient funds");
 
-            uint256 refundAmount = msg.value - whitelistPrice;
             whitelisted[msg.sender] = false;
 
             _safeMintInternal(to, uri);
-            _refundFunds(refundAmount);
 
         } else {
-            require(msg.value >= publicPrice, "Insufficient funds");
-            uint256 refundAmount = msg.value - publicPrice;
+            require(msg.value == publicPrice, "Insufficient funds");
 
             _safeMintInternal(to, uri);
-            _refundFunds(refundAmount);
         }
     }
 
@@ -79,12 +81,6 @@ contract nuarNFT is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
         _setTokenURI(_tokenId, uri);
 
         currentTotalSupply += 1;
-    }
-
-    function _refundFunds(uint256 refundAmount) internal {
-        if(refundAmount > 0) {
-            TransferHelper.safeTransferETH(msg.sender, refundAmount);
-        }
     }
 
     function transferFrom(address from, address to, uint256 tokenId) public override(ERC721, IERC721) blacklist(to) {
@@ -97,6 +93,17 @@ contract nuarNFT is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
 
     function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data) public override(ERC721, IERC721) blacklist(to) {
         super.safeTransferFrom(from, to, tokenId, data);
+    }
+    
+    // Owner-only functions
+    function reveal(string memory _newBaseURI) external onlyOwner {
+        baseURI = _newBaseURI;
+        revealed = true;
+    }
+
+    // Owner-only functions
+    function withdrawETH() external onlyOwner {
+        TransferHelper.safeTransferETH(msg.sender, address(this).balance);
     }
 
     // Owner-only functions
@@ -147,19 +154,29 @@ contract nuarNFT is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
     
     // Owner-only functions
     function slashingTotalSupply() external initializer onlyOwner {
-        TOTAL_SUPPLY = TOTAL_SUPPLY / 2; // TOTAL_SUPPLY =  4444
+        TOTAL_SUPPLY = 4444; 
     }
 
     // The following functions are overrides required by Solidity.
 
     function tokenURI(uint256 tokenId)
-        public
-        view
-        override(ERC721URIStorage)
-        returns (string memory)
-    {
-        return super.tokenURI(tokenId);
+    public
+    view
+    virtual
+    override
+    returns (string memory)
+  {
+    require(
+      _exists(tokenId),
+      "ERC721Metadata: URI query for nonexistent token"
+    );
+    
+    if(!revealed) {
+        return "ipfs://QmbMYusHbqFujnrT3HjJjLk9fq62YWQTsBe2Pbz1JTVytf";
     }
+
+    return string(abi.encodePacked(baseURI, tokenId.toString(), baseExtension));
+  }
 
     function supportsInterface(bytes4 interfaceId)
         public
