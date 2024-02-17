@@ -48,7 +48,7 @@ contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
         ERC721(name, symbol)
     {}
 
-    function mint(uint256 tokenId, address to, string memory uri) external payable nonReentrant {
+    function mint(uint256 tokenId, address to) external payable nonReentrant {
         require(isSaleActive, "The sale is not active");
         require(_totalSupply <= TOTAL_SUPPLY, "total supply overflow");
 
@@ -57,26 +57,24 @@ contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
             require(!usedNFTs[tokenId], "The NFT has already been used");
 
             usedNFTs[tokenId] = true;
-            _safeMintInternal(to, uri);
+            _safeMintInternal(to);
         } else if(phase == MintingPhase.Whitelist) {
             require(whitelisted[msg.sender], "The whitelist is missing");
             require(msg.value == whitelistPrice, "Insufficient funds");
 
             whitelisted[msg.sender] = false;
 
-            _safeMintInternal(to, uri);
+            _safeMintInternal(to);
 
         } else {
             require(msg.value == publicPrice, "Insufficient funds");
 
-            _safeMintInternal(to, uri);
+            _safeMintInternal(to);
         }
     }
 
-    function _safeMintInternal(address to, string memory uri) internal {
-        uint256 _tokenId = _totalSupply++;
-        _safeMint(to, _tokenId);
-        _setTokenURI(_tokenId, uri);
+    function _safeMintInternal(address to) internal {
+        _safeMint(to, _totalSupply++);
 
         _totalSupply++;
     }
