@@ -74,9 +74,9 @@ contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
     }
 
     function _safeMintInternal(address to) internal {
-        _safeMint(to, _totalSupply++);
-
         _totalSupply++;
+        _safeMint(to, _totalSupply);
+
     }
 
     function transferFrom(address from, address to, uint256 tokenId) public override(ERC721, IERC721) blacklist(to) {
