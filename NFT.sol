@@ -160,22 +160,19 @@ contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
     // The following functions are overrides required by Solidity.
 
     function tokenURI(uint256 tokenId)
-    public
-    view
-    virtual
-    override
-    returns (string memory)
+        public
+        view
+        virtual
+        override
+        returns (string memory)
   {
-    require(
-      _exists(tokenId),
-      "ERC721Metadata: URI query for nonexistent token"
-    );
+        require(_exists(tokenId), "ERC721Metadata: URI query for nonexistent token");
     
-    if(!revealed) {
-        return "ipfs://QmbMYusHbqFujnrT3HjJjLk9fq62YWQTsBe2Pbz1JTVytf";
-    }
+        if(!revealed) {
+            return "ipfs://QmbMYusHbqFujnrT3HjJjLk9fq62YWQTsBe2Pbz1JTVytf";
+        }
 
-    return string(abi.encodePacked(baseURI, tokenId.toString(), baseExtension));
+        return string(abi.encodePacked(baseURI, tokenId.toString(), baseExtension));
   }
 
     function supportsInterface(bytes4 interfaceId)
