@@ -20,8 +20,8 @@ contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
     bool public isSaleActive;
     bool public revealed;
     
-    uint public TOTAL_SUPPLY = 8888;
-    uint256 public totalSupply;
+    uint private _maxTotalSupply = 8888;
+    uint256 private _totalSupply;
 
     MintingPhase public phase;
 
@@ -50,7 +50,7 @@ contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
 
     function mint(uint256 tokenId, address to) external payable nonReentrant {
         require(isSaleActive, "The sale is not active");
-        require(totalSupply <= TOTAL_SUPPLY, "total supply overflow");
+        require(_totalSupply <= _maxTotalSupply, "total supply overflow");
 
         if(phase == MintingPhase.Exchange) {
             require(msg.sender == EXCHANGE_NFT.ownerOf(tokenId), "You are not the owner of the NFT");
@@ -74,8 +74,8 @@ contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
     }
 
     function _safeMintInternal(address to) internal {
-        totalSupply++;
-        _safeMint(to, totalSupply);
+        _totalSupply++;
+        _safeMint(to, _totalSupply);
 
     }
 
@@ -149,8 +149,12 @@ contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
     }
     
     // Owner-only functions
-    function slashingTotalSupply() external initializer onlyOwner {
-        TOTAL_SUPPLY = 4444; 
+    function slashingMaxTotalSupply() external initializer onlyOwner {
+        _maxTotalSupply = 4444; 
+    }
+
+    function totalSupply() external view returns(uint256) {
+        return _totalSupply;
     }
 
     // The following functions are overrides required by Solidity.
