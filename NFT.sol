@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./TransferHelper.sol";
 
-contract MyToken is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
+contract nuarNFT is ERC721URIStorage, Ownable, Initializable, ReentrancyGuard {
     
     IERC721 public constant EXCHANGE_NFT = IERC721(0xCd76D0Cf64Bf4A58D898905C5adAD5e1E838E0d3);
 
